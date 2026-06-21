@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ETMAN — Flujos Intersucursales</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --bg:#0d0f14; --border:#1e2433; --text:#e2e8f0; --muted:#64748b; --dim:#3a4460; --panel:#1a1f2e; --panel-bd:#2a2f3d; --chip-txt:#94a3b8; --tile-filter: brightness(.45) saturate(.5) hue-rotate(195deg); --leaflet-bg:#111827; }
+    body.light-mode { --bg:#f4f5f8; --border:#dde1ea; --text:#1a202c; --muted:#64748b; --dim:#94a3b8; --panel:#ffffff; --panel-bd:#dde1ea; --chip-txt:#475569; --tile-filter: brightness(1.05) saturate(.85); --leaflet-bg:#e5e7eb; }
+    html, body { height:100%; background:var(--bg); }
+    body { font-family:'DM Sans',sans-serif; color:var(--text); padding:1.2rem; display:flex; flex-direction:column; min-height:100vh; }
+    .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; padding-bottom:.8rem; border-bottom:0.5px solid var(--border); }
+    .header-left { display:flex; align-items:baseline; gap:1rem; }
+    .brand { font-family:'Space Mono',monospace; font-size:13px; font-weight:700; color:#4fc3f7; letter-spacing:.15em; text-transform:uppercase; }
+    .subtitle { font-size:13px; color:var(--muted); }
+    .date { font-family:'Space Mono',monospace; font-size:11px; color:var(--chip-txt); }
+    .nav-btn { display:flex; align-items:center; gap:8px; background:var(--panel); border:0.5px solid var(--panel-bd); border-radius:8px; padding:5px 12px; font-family:'DM Sans',sans-serif; font-size:12px; color:var(--chip-txt); cursor:pointer; text-decoration:none; transition:all .2s; }
+    button.nav-btn { font: inherit; outline: none; }
+    .nav-btn:hover { border-color:#4fc3f7; color:#4fc3f7; }
+    .controls { display:flex; align-items:center; gap:16px; margin-bottom:.8rem; flex-wrap:wrap; }
+    .switch-wrap { display:flex; align-items:center; gap:10px; }
+    .switch-lbl { font-size:12px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; transition:color .3s; }
+    .sw-outer { position:relative; width:48px; height:26px; cursor:pointer; }
+    .sw-outer input { opacity:0; width:0; height:0; }
+    .slider { position:absolute; inset:0; background:var(--border); border:0.5px solid var(--panel-bd); border-radius:13px; transition:.3s; }
+    .slider::before { content:''; position:absolute; width:18px; height:18px; left:4px; top:3px; background:#4fc3f7; border-radius:50%; transition:.3s; }
+    input:checked+.slider::before { transform:translateX(22px); background:#a78bfa; }
+    .legend { display:flex; gap:16px; align-items:center; margin-left:auto; }
+    .legend-title { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.08em; }
+    .legend-item { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--chip-txt); }
+    .legend-line { width:24px; height:3px; border-radius:2px; }
+    .map-wrap { flex:1; position:relative; min-height:580px; }
+    #map { width:100%; height:100%; border-radius:10px; border:0.5px solid var(--border); }
+    #flow-svg { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; border-radius:10px; overflow:hidden; z-index:500; }
+    #flow-svg path, #flow-svg polygon { pointer-events:none; }
+    #flow-svg .hit { pointer-events:stroke; cursor:pointer; }
+    .filter-panel { position:absolute; top:12px; right:12px; z-index:1000; background:var(--panel); opacity:.96; border:0.5px solid var(--panel-bd); border-radius:10px; padding:12px 14px; min-width:180px; backdrop-filter:blur(8px); }
+    .fp-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; padding-bottom:8px; border-bottom:0.5px solid var(--border); }
+    .fp-title { font-family:'Space Mono',monospace; font-size:9px; font-weight:700; color:#4fc3f7; letter-spacing:.1em; text-transform:uppercase; }
+    .fp-all { font-size:9px; color:var(--dim); cursor:pointer; transition:color .2s; }
+    .fp-all:hover { color:#4fc3f7; }
+    .fp-item { display:flex; align-items:center; gap:8px; padding:5px 0; cursor:pointer; user-select:none; }
+    .fp-item:not(:last-child) { border-bottom:0.5px solid var(--border); }
+    .fp-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; border:1.5px solid; transition:opacity .2s; }
+    .fp-name { font-size:11px; color:var(--chip-txt); transition:color .2s; }
+    .fp-item.off .fp-dot { opacity:.25; }
+    .fp-item.off .fp-name { color:var(--dim); }
+    .filter-panel.hidden { display:none; }
+    .leaflet-container { background:var(--leaflet-bg) !important; }
+    .leaflet-tile { filter: var(--tile-filter); }
+    .leaflet-control-attribution { display:none !important; }
+    .leaflet-control-zoom a { background:var(--panel) !important; color:#4fc3f7 !important; border-color:var(--border) !important; }
+    .leaflet-control-zoom a:hover { background:var(--border) !important; }
+    .leaflet-popup-content-wrapper { background:var(--panel); border:0.5px solid var(--panel-bd); border-radius:8px; box-shadow:0 4px 24px rgba(0,0,0,.25); padding:0; }
+    .leaflet-popup-content { margin:12px 16px; font-family:'DM Sans',sans-serif; }
+    .leaflet-popup-tip { background:var(--panel); }
+    .leaflet-popup-close-button { color:var(--dim) !important; font-size:16px !important; }
+    .pop-title { font-family:'Space Mono',monospace; font-size:10px; font-weight:700; color:var(--text); margin-bottom:8px; padding-bottom:6px; border-bottom:0.5px solid var(--border); }
+    .pop-row { display:flex; gap:20px; margin-bottom:8px; }
+    .pop-metric { text-align:center; flex:1; }
+    .pop-val { font-family:'Space Mono',monospace; font-size:14px; font-weight:700; color:var(--text); line-height:1; }
+    .pop-lbl { font-size:9px; color:var(--dim); text-transform:uppercase; letter-spacing:.06em; margin-top:3px; }
+    .pop-sep { border:none; border-top:0.5px solid var(--border); margin:6px 0; }
+    .pop-dias { font-family:'Space Mono',monospace; font-size:12px; font-weight:700; text-align:center; }
+    .node-tip { background:var(--panel) !important; border:0.5px solid var(--border) !important; border-radius:6px !important; padding:4px 10px !important; box-shadow:none !important; color:var(--text) !important; }
+    .node-tip::before { display:none !important; }
+    @keyframes dashFlow { to { stroke-dashoffset:-40; } }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span class="brand">ETMAN</span>
+    <span class="subtitle">Flujos Intersucursales</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <span class="date" id="hdr-date"></span>
+    <button class="nav-btn" id="theme-toggle" type="button">
+      <span id="theme-icon">🌙</span><span id="theme-label">Modo claro</span>
+    </button>
+    <a class="nav-btn" href="index.html">← Flujo de mercadería</a>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="switch-wrap">
+    <span class="switch-lbl" id="lbl-t" style="color:#4fc3f7;">Transferencias</span>
+    <label class="sw-outer"><input type="checkbox" id="sw"><span class="slider"></span></label>
+    <span class="switch-lbl" id="lbl-c" style="color:var(--dim);">Complementos</span>
+  </div>
+  <div class="legend">
+    <span class="legend-title">Demora →</span>
+    <div class="legend-item"><div class="legend-line" style="background:#22c55e;"></div>1 día</div>
+    <div class="legend-item"><div class="legend-line" style="background:#f59e0b;"></div>2–3 días</div>
+    <div class="legend-item"><div class="legend-line" style="background:#ef4444;"></div>4+ días</div>
+    <div style="width:0.5px;height:20px;background:var(--border);"></div>
+    <span class="legend-title">Opacidad →</span>
+    <div class="legend-item" style="gap:4px;">
+      <div style="width:30px;height:3px;border-radius:2px;background:#94a3b8;opacity:.15;"></div>
+      <div style="width:30px;height:3px;border-radius:2px;background:#94a3b8;opacity:.5;"></div>
+      <div style="width:30px;height:3px;border-radius:2px;background:#94a3b8;opacity:1;"></div>
+    </div>
+    <span style="font-size:10px;color:var(--chip-txt);">Volumen</span>
+  </div>
+</div>
+
+<div class="map-wrap">
+  <div id="map"></div>
+  <svg id="flow-svg" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <style>
+        .fl-ok   { stroke-dasharray:12 6; animation:dashFlow 0.5s  linear infinite; }
+        .fl-warn { stroke-dasharray:12 6; animation:dashFlow 1.4s  linear infinite; }
+        .fl-crit { stroke-dasharray:12 6; animation:dashFlow 3s    linear infinite; }
+      </style>
+    </defs>
+    <g id="flow-paths"></g>
+  </svg>
+  <div class="filter-panel hidden" id="filter-panel">
+    <div class="fp-header">
+      <span class="fp-title">Filtrar sucursales</span>
+      <span class="fp-all" id="fp-all">Todas</span>
+    </div>
+    <div id="fp-list"></div>
+  </div>
+</div>
+
+<script>
+/* ── DATE ── */
+const now=new Date();
+const DS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const MS=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+document.getElementById('hdr-date').textContent=`${DS[now.getDay()]} ${now.getDate()} ${MS[now.getMonth()]} ${now.getFullYear()}`;
+
+/* ── MAP ── */
+const map=L.map('map',{
+  center:[-34.2,-63.0], zoom:5,
+  bearing:-45, rotate:true, touchRotate:false,
+  zoomControl:true, scrollWheelZoom:true, attributionControl:false,
+});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:10,minZoom:4}).addTo(map);
+
+/* ── NODES ── */
+const NODES={
+  moreno:     {lat:-34.65,lng:-58.79,name:'Moreno',      tag:'HUB',col:'#4fc3f7'},
+  bahia:      {lat:-38.72,lng:-62.27,name:'Bahía Blanca',tag:'BBL',col:'#a78bfa'},
+  cordoba:    {lat:-31.42,lng:-64.18,name:'Córdoba',     tag:'CBA',col:'#fb923c'},
+  guaymallen: {lat:-32.89,lng:-68.84,name:'Guaymallén', tag:'MDZ',col:'#f472b6'},
+  rosario:    {lat:-32.95,lng:-60.65,name:'Rosario',     tag:'ROS',col:'#34d399'},
+  parana:     {lat:-31.73,lng:-60.53,name:'Paraná',      tag:'PRA',col:'#facc15'},
+  rafaela:    {lat:-31.25,lng:-61.49,name:'Rafaela',     tag:'RAF',col:'#60a5fa'},
+};
+
+function nodeIcon(col){
+  return L.divIcon({
+    className:'',
+    html:`<div style="width:22px;height:22px;border-radius:50%;background:#0d0f14;border:2px solid ${col};box-shadow:0 0 12px ${col}66;display:flex;align-items:center;justify-content:center;"><div style="width:7px;height:7px;border-radius:50%;background:${col};"></div></div>`,
+    iconSize:[22,22],iconAnchor:[11,11],
+  });
+}
+Object.entries(NODES).forEach(([k,n])=>{
+  L.marker([n.lat,n.lng],{icon:nodeIcon(n.col),zIndexOffset:1000})
+    .addTo(map)
+    .bindTooltip(
+      `<span style="font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:${n.col};">${n.name}</span> <span style="font-size:9px;color:var(--dim);">${n.tag}</span>`,
+      {permanent:true,direction:'right',offset:[14,0],className:'node-tip'}
+    );
+});
+
+const activeFilter=new Set(Object.keys(NODES));
+
+/* ── FLOWS ── */
+const FLOWS={
+  transferencias:[
+    {from:'moreno',to:'bahia',      L:420,U:3200,dias:1},
+    {from:'moreno',to:'cordoba',    L:310,U:2400,dias:2},
+    {from:'moreno',to:'guaymallen', L:280,U:2100,dias:2},
+    {from:'moreno',to:'rosario',    L:190,U:1500,dias:1},
+    {from:'moreno',to:'parana',     L:140,U:1100,dias:2},
+    {from:'moreno',to:'rafaela',    L:120,U:940, dias:1},
+  ],
+  complementos:[
+    {from:'bahia',      to:'cordoba',    L:35, U:41, dias:3},{from:'cordoba',    to:'bahia',      L:28, U:33, dias:3},
+    {from:'bahia',      to:'guaymallen', L:18, U:21, dias:4},{from:'guaymallen', to:'bahia',      L:14, U:17, dias:4},
+    {from:'bahia',      to:'rosario',    L:30, U:35, dias:2},{from:'rosario',    to:'bahia',      L:24, U:28, dias:2},
+    {from:'bahia',      to:'parana',     L:22, U:26, dias:3},{from:'parana',     to:'bahia',      L:18, U:21, dias:3},
+    {from:'bahia',      to:'rafaela',    L:20, U:24, dias:2},{from:'rafaela',    to:'bahia',      L:16, U:19, dias:2},
+    {from:'cordoba',    to:'guaymallen', L:60, U:71, dias:1},{from:'guaymallen', to:'cordoba',    L:45, U:53, dias:1},
+    {from:'cordoba',    to:'rosario',    L:185,U:220,dias:1},{from:'rosario',    to:'cordoba',    L:160,U:190,dias:1},
+    {from:'cordoba',    to:'parana',     L:38, U:45, dias:2},{from:'parana',     to:'cordoba',    L:30, U:36, dias:2},
+    {from:'cordoba',    to:'rafaela',    L:32, U:38, dias:1},{from:'rafaela',    to:'cordoba',    L:26, U:31, dias:1},
+    {from:'guaymallen', to:'rosario',    L:25, U:30, dias:2},{from:'rosario',    to:'guaymallen', L:20, U:24, dias:2},
+    {from:'guaymallen', to:'parana',     L:18, U:21, dias:3},{from:'parana',     to:'guaymallen', L:14, U:17, dias:3},
+    {from:'guaymallen', to:'rafaela',    L:15, U:18, dias:2},{from:'rafaela',    to:'guaymallen', L:12, U:14, dias:2},
+    {from:'rosario',    to:'parana',     L:175,U:210,dias:1},{from:'parana',     to:'rosario',    L:155,U:185,dias:1},
+    {from:'rosario',    to:'rafaela',    L:190,U:228,dias:1},{from:'rafaela',    to:'rosario',    L:165,U:198,dias:1},
+    {from:'parana',     to:'rafaela',    L:25, U:30, dias:1},{from:'rafaela',    to:'parana',     L:20, U:24, dias:1},
+  ],
+};
+
+/* ── HELPERS ── */
+function fmt(n){return n>=1000?(n/1000).toFixed(1)+'k':String(n);}
+function dcol(d){return d<=1?'#22c55e':d<=3?'#f59e0b':'#ef4444';}
+function diasTxt(d){return d===1?'1 día':`${d} días`;}
+function animCls(d){return d<=1?'fl-ok':d<=3?'fl-warn':'fl-crit';}
+
+function latLngToPx(lat,lng){
+  const pt=map.latLngToContainerPoint(L.latLng(lat,lng));
+  return {x:pt.x,y:pt.y};
+}
+
+/*
+  CURVE LOGIC — guaranteed opposite arcs:
+  For each pair (A,B), we define a CANONICAL vector using alphabetical sort.
+  isIda=true  → control point LEFT  of canonical vector (+1 side)
+  isIda=false → control point RIGHT of canonical vector (-1 side)
+  Both use the SAME canonical vector, so +1 and -1 are truly opposite sides.
+  The path endpoint order (from→to) is independent of the canonical vector.
+*/
+const CURVE_PX=45;
+
+function getCP(fromKey,toKey,fromPx,toPx,isIda){
+  // Canonical direction: alphabetically first node → second node
+  const sorted=[fromKey,toKey].sort();
+  // ax,ay is always the alphabetically-first node
+  const isCanonical=(fromKey===sorted[0]);
+  const ax=isCanonical?fromPx.x:toPx.x;
+  const ay=isCanonical?fromPx.y:toPx.y;
+  const bx=isCanonical?toPx.x:fromPx.x;
+  const by=isCanonical?toPx.y:fromPx.y;
+  // Midpoint and perpendicular of canonical vector
+  const mx=(ax+bx)/2, my=(ay+by)/2;
+  const dx=bx-ax, dy=by-ay;
+  const len=Math.sqrt(dx*dx+dy*dy)||1;
+  // Left of canonical = rotate CCW = (-dy/len, dx/len)
+  // Right of canonical = rotate CW  = ( dy/len,-dx/len)
+  const sign=isIda?1:-1;
+  return {
+    cpx: mx+(-dy/len)*CURVE_PX*sign,
+    cpy: my+( dx/len)*CURVE_PX*sign,
+  };
+}
+
+function buildD(fromKey,toKey,fromPx,toPx,isIda){
+  const {cpx,cpy}=getCP(fromKey,toKey,fromPx,toPx,isIda);
+  return `M ${fromPx.x} ${fromPx.y} Q ${cpx} ${cpy} ${toPx.x} ${toPx.y}`;
+}
+
+function getArrow(fromKey,toKey,fromPx,toPx,isIda){
+  const {cpx,cpy}=getCP(fromKey,toKey,fromPx,toPx,isIda);
+  const t=0.72;
+  const fx=fromPx.x,fy=fromPx.y,bx=toPx.x,by=toPx.y;
+  const qx=(1-t)*(1-t)*fx+2*(1-t)*t*cpx+t*t*bx;
+  const qy=(1-t)*(1-t)*fy+2*(1-t)*t*cpy+t*t*by;
+  const tdx=2*(1-t)*(cpx-fx)+2*t*(bx-cpx);
+  const tdy=2*(1-t)*(cpy-fy)+2*t*(by-cpy);
+  return {x:qx,y:qy,angle:Math.atan2(tdy,tdx)*180/Math.PI};
+}
+
+/* ── RENDER ── */
+const SVG_NS='http://www.w3.org/2000/svg';
+const pathsG=document.getElementById('flow-paths');
+const svgEl=document.getElementById('flow-svg');
+const flowData=[];
+let popupLayer=null, animId=0;
+
+function redrawFlows(){
+  flowData.forEach(fd=>{
+    const A=NODES[fd.from],B=NODES[fd.to];
+    const pa=latLngToPx(A.lat,A.lng);
+    const pb=latLngToPx(B.lat,B.lng);
+    const d=buildD(fd.from,fd.to,pa,pb,fd.isIda);
+    fd.path.setAttribute('d',d);
+    fd.hit.setAttribute('d',d);
+    const arr=getArrow(fd.from,fd.to,pa,pb,fd.isIda);
+    fd.arrow.setAttribute('transform',`translate(${arr.x},${arr.y}) rotate(${arr.angle})`);
+  });
+}
+
+function clearFlows(){
+  while(pathsG.firstChild) pathsG.removeChild(pathsG.firstChild);
+  flowData.length=0;
+  if(popupLayer){map.removeLayer(popupLayer);popupLayer=null;}
+  cancelAnimationFrame(animId);
+}
+
+function renderFlows(mode){
+  clearFlows();
+
+  const flows=FLOWS[mode];
+
+  // Max volume for opacity normalization (complementos only)
+  const maxVol=mode==='complementos'
+    ? Math.max(...FLOWS.complementos.map(f=>f.L))
+    : 1;
+
+  // Track pair occurrences: first = isIda true, second = isIda false
+  const pairSeen={};
+
+  flows.forEach(f=>{
+    const A=NODES[f.from],B=NODES[f.to];
+    if(!A||!B) return;
+    if(mode==='complementos'&&!activeFilter.has(f.from)&&!activeFilter.has(f.to)) return;
+
+    const pairKey=[f.from,f.to].sort().join('|');
+    pairSeen[pairKey]=(pairSeen[pairKey]||0)+1;
+    const isIda=pairSeen[pairKey]===1;
+
+    const col=dcol(f.dias);
+    const cls=animCls(f.dias);
+
+    // Opacity: 10%–100% proportional to volume (complementos), always 100% transferencias
+    const opacity=mode==='complementos'
+      ? Math.max(0.1, f.L/maxVol)
+      : 1;
+
+    const pa=latLngToPx(A.lat,A.lng);
+    const pb=latLngToPx(B.lat,B.lng);
+    const d=buildD(f.from,f.to,pa,pb,isIda);
+
+    // Hit area — wide transparent stroke for easier clicking
+    const hit=document.createElementNS(SVG_NS,'path');
+    hit.setAttribute('d',d);
+    hit.setAttribute('stroke','transparent');
+    hit.setAttribute('stroke-width','16');
+    hit.setAttribute('fill','none');
+    hit.setAttribute('class','hit');
+    pathsG.appendChild(hit);
+
+    // Visible line
+    const path=document.createElementNS(SVG_NS,'path');
+    path.setAttribute('d',d);
+    path.setAttribute('stroke',col);
+    path.setAttribute('stroke-width','2.5');
+    path.setAttribute('fill','none');
+    path.setAttribute('stroke-linecap','round');
+    path.setAttribute('opacity',opacity);
+    path.setAttribute('class',cls);
+    pathsG.appendChild(path);
+
+    // Arrow
+    const arr=getArrow(f.from,f.to,pa,pb,isIda);
+    const arrow=document.createElementNS(SVG_NS,'polygon');
+    arrow.setAttribute('points','-8,-5 0,0 -8,5');
+    arrow.setAttribute('fill',col);
+    arrow.setAttribute('opacity',opacity);
+    arrow.setAttribute('transform',`translate(${arr.x},${arr.y}) rotate(${arr.angle})`);
+    pathsG.appendChild(arrow);
+
+    // Popup on click
+    const fSnap={...f};
+    const Asnap=A, Bsnap=B;
+    hit.addEventListener('click',e=>{
+      const rect=svgEl.getBoundingClientRect();
+      const latlng=map.containerPointToLatLng(L.point(e.clientX-rect.left,e.clientY-rect.top));
+      if(popupLayer) map.removeLayer(popupLayer);
+      popupLayer=L.popup({closeButton:true,maxWidth:200})
+        .setLatLng(latlng)
+        .setContent(`
+          <div class="pop-title">${Asnap.name} → ${Bsnap.name}</div>
+          <div class="pop-row">
+            <div class="pop-metric"><div class="pop-val">${fmt(fSnap.L)}</div><div class="pop-lbl">Líneas</div></div>
+            <div class="pop-metric"><div class="pop-val">${fmt(fSnap.U)}</div><div class="pop-lbl">Unidades</div></div>
+          </div>
+          <hr class="pop-sep"/>
+          <div class="pop-dias" style="color:${col};">⧖ ${diasTxt(fSnap.dias)}</div>
+        `)
+        .openOn(map);
+    });
+
+    flowData.push({from:f.from,to:f.to,isIda,path,hit,arrow});
+  });
+
+  // Sync loop
+  function loop(){ redrawFlows(); animId=requestAnimationFrame(loop); }
+  animId=requestAnimationFrame(loop);
+}
+
+/* ── FILTER PANEL ── */
+function buildFilterPanel(){
+  const list=document.getElementById('fp-list');
+  list.innerHTML='';
+  Object.entries(NODES).forEach(([k,n])=>{
+    const item=document.createElement('div');
+    item.className='fp-item';
+    item.innerHTML=`<div class="fp-dot" style="background:${n.col};border-color:${n.col};"></div><span class="fp-name">${n.name}</span>`;
+    item.addEventListener('click',()=>{
+      if(activeFilter.has(k)){
+        if(activeFilter.size<=1) return;
+        activeFilter.delete(k);
+        item.classList.add('off');
+      } else {
+        activeFilter.add(k);
+        item.classList.remove('off');
+      }
+      renderFlows('complementos');
+    });
+    list.appendChild(item);
+  });
+}
+document.getElementById('fp-all').addEventListener('click',()=>{
+  Object.keys(NODES).forEach(k=>activeFilter.add(k));
+  document.querySelectorAll('.fp-item').forEach(el=>el.classList.remove('off'));
+  renderFlows('complementos');
+});
+buildFilterPanel();
+
+/* ── SWITCH ── */
+const sw=document.getElementById('sw');
+const panel=document.getElementById('filter-panel');
+sw.addEventListener('change',e=>{
+  const comp=e.target.checked;
+  document.getElementById('lbl-t').style.color=comp?'var(--dim)':'#4fc3f7';
+  document.getElementById('lbl-c').style.color=comp?'#a78bfa':'var(--dim)';
+  panel.classList.toggle('hidden',!comp);
+  renderFlows(comp?'complementos':'transferencias');
+});
+
+/* ── INIT ── */
+map.whenReady(()=>setTimeout(()=>renderFlows('transferencias'),100));
+
+/* THEME TOGGLE */
+const themeBtn   = document.getElementById('theme-toggle');
+const themeIcon  = document.getElementById('theme-icon');
+const themeLabel = document.getElementById('theme-label');
+
+function applyTheme(light) {
+  document.body.classList.toggle('light-mode', light);
+  themeIcon.textContent = light ? '☀️' : '🌙';
+  themeLabel.textContent = light ? 'Modo oscuro' : 'Modo claro';
+}
+const savedTheme = localStorage.getItem('etman-theme');
+applyTheme(savedTheme === 'light');
+
+themeBtn.addEventListener('click', () => {
+  const isLight = !document.body.classList.contains('light-mode');
+  applyTheme(isLight);
+  localStorage.setItem('etman-theme', isLight ? 'light' : 'dark');
+});
+</script>
+</body>
+</html>

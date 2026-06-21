@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ETMAN — Flujo de Mercadería</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f14;
+      --bg-buf:    #120f1a;
+      --bg-flujo:  #0f141a;
+      --border:    #1e2433;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --dim:       #3a4460;
+      --panel:     #1a1f2e;
+      --panel-bd:  #2a2f3d;
+      --chip-bg:   #141820;
+      --chip-bd:   #252d3d;
+      --chip-txt:  #94a3b8;
+      --row-line:  #141820;
+      --mono:      'Space Mono', monospace;
+      --sans:      'DM Sans', sans-serif;
+    }
+
+    body.light-mode {
+      --bg:        #f4f5f8;
+      --bg-buf:    #ffffff;
+      --bg-flujo:  #ffffff;
+      --border:    #dde1ea;
+      --text:      #1a202c;
+      --muted:     #64748b;
+      --dim:       #94a3b8;
+      --panel:     #ffffff;
+      --panel-bd:  #dde1ea;
+      --chip-bg:   #ffffff;
+      --chip-bd:   #dde1ea;
+      --chip-txt:  #475569;
+      --row-line:  #eef0f5;
+    }
+    body.light-mode .buf-cell,
+    body.light-mode .suc-header,
+    body.light-mode .hist-badge {
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+
+    html, body { height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+
+    /* HEADER */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 0.5px solid var(--border);
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .header-left { display: flex; align-items: baseline; gap: 1rem; }
+    .brand { font-family: var(--mono); font-size: 13px; font-weight: 700; color: #4fc3f7; letter-spacing: .15em; text-transform: uppercase; }
+    .subtitle { font-size: 13px; color: var(--muted); }
+    .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+    .mode-btn {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--panel); border: 0.5px solid var(--panel-bd); border-radius: 8px;
+      padding: 6px 14px; font-family: var(--sans); font-size: 12px;
+      color: var(--chip-txt); cursor: pointer; text-decoration: none; transition: all .2s;
+    }
+    button.mode-btn { font: inherit; outline: none; }
+    .mode-btn:hover { border-color: #4fc3f7; color: #4fc3f7; }
+    .mode-dot { width: 6px; height: 6px; border-radius: 50%; background: #4fc3f7; }
+
+    /* DATE PICKER */
+    .date-wrap {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--panel); border: 0.5px solid var(--panel-bd); border-radius: 8px; padding: 5px 12px;
+    }
+    .date-wrap label { font-family: var(--mono); font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; }
+    #date-input { background: transparent; border: none; font-family: var(--mono); font-size: 11px; color: var(--text); cursor: pointer; outline: none; color-scheme: dark; }
+
+    /* HISTORICAL BADGE */
+    .hist-badge {
+      display: none; align-items: center; gap: 6px;
+      background: #1c1400; border: 0.5px solid #78350f; border-radius: 6px;
+      padding: 4px 10px; font-family: var(--mono); font-size: 10px; color: #f59e0b; letter-spacing: .06em;
+    }
+    .hist-badge.visible { display: flex; }
+    .hist-dot { width: 5px; height: 5px; border-radius: 50%; background: #f59e0b; }
+
+    /* FILTER BAR */
+    .filter-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 1.2rem; flex-wrap: wrap; }
+    .filter-section { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .filter-lbl { font-family: var(--mono); font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: .1em; white-space: nowrap; }
+    .filter-sep { width: 0.5px; height: 20px; background: var(--border); margin: 0 6px; }
+
+    .suc-chip {
+      display: flex; align-items: center; gap: 5px;
+      background: var(--chip-bg); border: 0.5px solid var(--chip-bd); border-radius: 20px;
+      padding: 4px 10px; font-size: 11px; font-weight: 500; color: var(--chip-txt);
+      cursor: pointer; transition: all .18s; user-select: none;
+    }
+    .suc-chip .chip-dot { width: 6px; height: 6px; border-radius: 50%; opacity: .5; transition: opacity .18s; }
+    .suc-chip.active { border-color: currentColor; color: var(--text); }
+    .suc-chip.active .chip-dot { opacity: 1; }
+    .suc-chip:hover { border-color: #4fc3f7; color: var(--text); }
+
+    #kpi-select {
+      background: var(--chip-bg); border: 0.5px solid var(--chip-bd); border-radius: 8px;
+      padding: 5px 10px; font-family: var(--sans); font-size: 11px; color: var(--chip-txt);
+      cursor: pointer; outline: none; color-scheme: dark; transition: border-color .18s;
+    }
+    #kpi-select:focus { border-color: #4fc3f7; color: var(--text); }
+
+    /* SCROLL / BOARD */
+    .scroll-wrap { overflow-x: auto; padding-bottom: 1.5rem; }
+    .board { display: inline-grid; align-items: start; }
+
+    .suc-header { text-align: center; padding: 0 8px 22px; transition: opacity .25s; }
+    .suc-header.dimmed { opacity: .15; pointer-events: none; }
+    .suc-name { font-size: 13px; font-weight: 600; }
+    .suc-tag { font-family: var(--mono); font-size: 9px; color: var(--dim); margin-top: 3px; }
+
+    .row-label { display: flex; flex-direction: column; justify-content: center; padding: 0 18px 0 0; }
+    .rl-type { font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 3px; }
+    .rl-type.buffer { color: #a78bfa; }
+    .rl-type.flujo  { color: #4fc3f7; }
+    .rl-name { font-size: 11px; font-weight: 600; color: var(--text); }
+
+    .board-row-wrap { transition: opacity .25s; }
+    .board-row-wrap.dimmed { opacity: .12; pointer-events: none; }
+    .board-cell { padding: 4px 0; transition: opacity .25s; }
+    .board-cell.dimmed { opacity: .12; pointer-events: none; }
+
+    /* BUFFER CELLS */
+    .buf-cell { border-radius: 10px; padding: 16px 18px; }
+    .metric-pair   { display: flex; gap: 18px; margin-bottom: 10px; }
+    .metric-pair-3 { display: flex; gap: 12px; margin-bottom: 10px; }
+    .metric { flex: 1; }
+    .metric-val { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--text); line-height: 1; }
+    .metric-lbl { font-size: 9px; color: var(--dim); margin-top: 4px; text-transform: uppercase; letter-spacing: .07em; }
+    .mdivider { width: 0.5px; background: var(--border); }
+
+    .extra-row { display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 0.5px solid var(--border); }
+    .conv-row { display: flex; gap: 14px; }
+    .conv-val { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--chip-txt); }
+    .conv-lbl { font-size: 8px; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+
+    .aging { display: flex; align-items: center; gap: 6px; padding-top: 10px; border-top: 0.5px solid var(--border); }
+    .aging-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+    .aging-val { font-family: var(--mono); font-size: 10px; font-weight: 700; }
+    .aging-lbl { font-size: 9px; color: var(--dim); }
+
+    .cap-bar-wrap { margin-top: 10px; padding-top: 10px; border-top: 0.5px solid var(--border); }
+    .cap-bar-lbl  { display: flex; justify-content: space-between; margin-bottom: 5px; }
+    .cap-bar-txt  { font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+    .cap-bar-pct  { font-family: var(--mono); font-size: 10px; font-weight: 700; }
+    .cap-bar-bg   { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+    .cap-bar-fill { height: 100%; border-radius: 2px; }
+
+    .demora-badge { font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 3px 8px; border-radius: 4px; }
+    .d-ok   { background: #0a1f12; color: #22c55e; border: 0.5px solid #14532d; }
+    .d-warn { background: #1c1400; color: #f59e0b; border: 0.5px solid #78350f; }
+    .d-crit { background: #1c0404; color: #ef4444; border: 0.5px solid #7f1d1d; }
+
+    /* FLUJO */
+    .flujo-data { display: flex; flex-direction: column; gap: 2px; }
+    .fd-val { font-family: var(--mono); font-size: 12px; font-weight: 700; line-height: 1; }
+    .fd-lbl { font-size: 8px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+
+    /* FLOW ANIMATIONS — live only */
+    @keyframes flowAnim { 0% { background-position: 0 0; } 100% { background-position: 0 40px; } }
+
+    body:not(.historical) .fl-ok {
+      background: repeating-linear-gradient(to bottom, #22c55e 0, #22c55e 18px, #0d3320 18px, #0d3320 28px);
+      background-size: 4px 40px; animation: flowAnim .45s linear infinite;
+    }
+    body:not(.historical) .fl-warn {
+      background: repeating-linear-gradient(to bottom, #f59e0b 0, #f59e0b 16px, #2a1a00 16px, #2a1a00 28px);
+      background-size: 4px 40px; animation: flowAnim 1.3s linear infinite;
+    }
+    body:not(.historical) .fl-crit {
+      background: repeating-linear-gradient(to bottom, #ef4444 0, #ef4444 14px, #2a0000 14px, #2a0000 28px);
+      background-size: 4px 40px; animation: flowAnim 3s linear infinite;
+    }
+
+    /* Static flow lines — historical */
+    body.historical .fl-ok   { background: repeating-linear-gradient(to bottom, #22c55e 0, #22c55e 18px, #0d3320 18px, #0d3320 28px); background-size: 4px 40px; opacity:.7; }
+    body.historical .fl-warn { background: repeating-linear-gradient(to bottom, #f59e0b 0, #f59e0b 16px, #2a1a00 16px, #2a1a00 28px); background-size: 4px 40px; opacity:.7; }
+    body.historical .fl-crit { background: repeating-linear-gradient(to bottom, #ef4444 0, #ef4444 14px, #2a0000 14px, #2a0000 28px); background-size: 4px 40px; opacity:.7; }
+
+    /* LEGEND */
+    .legend { display: flex; gap: 24px; margin-top: 1.4rem; padding-top: 1rem; border-top: 0.5px solid var(--border); justify-content: flex-end; flex-wrap: wrap; align-items: center; }
+    .legend-title { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; }
+    .legend-group { display: flex; align-items: center; gap: 12px; }
+    .legend-item  { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--chip-txt); }
+    .legend-dot   { width: 7px; height: 7px; border-radius: 50%; }
+    .legend-sep   { width: 0.5px; height: 20px; background: var(--border); }
+
+    .last-update { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: .5rem; text-align: right; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-left">
+      <span class="brand">ETMAN</span>
+      <span class="subtitle">Flujo de Mercadería — Red Completa</span>
+    </div>
+    <div class="header-right">
+      <div class="hist-badge" id="hist-badge">
+        <div class="hist-dot"></div>CIERRE HISTÓRICO
+      </div>
+      <div class="date-wrap">
+        <label for="date-input">Fecha</label>
+        <input type="date" id="date-input" />
+      </div>
+      <button class="mode-btn" id="theme-toggle" type="button">
+        <div class="mode-dot" id="theme-dot" style="background:#facc15;"></div><span id="theme-label">Modo claro</span>
+      </button>
+      <a class="mode-btn" href="reporte.html">
+        <div class="mode-dot" style="background:#a78bfa;"></div>Reportería
+      </a>
+      <a class="mode-btn" href="mapa.html">
+        <div class="mode-dot"></div>Ver flujos intersucursales
+      </a>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <span class="filter-lbl">Sucursal</span>
+    <div class="filter-section" id="suc-chips"></div>
+    <div class="filter-sep"></div>
+    <span class="filter-lbl">Etapa</span>
+    <select id="kpi-select">
+      <option value="all">Todas las etapas</option>
+      <option value="tBuf">Tránsito inbound</option>
+      <option value="rec">Recepción</option>
+      <option value="rBuf">Buffer RECEP</option>
+      <option value="guard">Guardado</option>
+      <option value="pBuf">Pedidos pendientes</option>
+      <option value="pick">Picking</option>
+      <option value="audit">Auditoría</option>
+      <option value="desp">Despacho</option>
+    </select>
+  </div>
+
+  <div class="scroll-wrap">
+    <div id="board" class="board"></div>
+  </div>
+
+  <div class="legend">
+    <span class="legend-title">Buffer →</span>
+    <div class="legend-group">
+      <div class="legend-item"><div class="legend-dot" style="background:#a78bfa;opacity:.35;"></div>Holgado</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f59e0b;"></div>Atención</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ef4444;"></div>Saturado</div>
+    </div>
+    <div class="legend-sep"></div>
+    <span class="legend-title">Flujo →</span>
+    <div class="legend-group">
+      <div class="legend-item"><div class="legend-dot" style="background:#22c55e;"></div>Alto</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f59e0b;"></div>Medio</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ef4444;"></div>Bajo</div>
+    </div>
+  </div>
+
+  <p class="last-update" id="last-update"></p>
+
+<script>
+/* DATA LIVE */
+const SUC = [
+  { name: 'Moreno',       tag: 'HUB' },
+  { name: 'Bahía Blanca', tag: 'BBL' },
+  { name: 'Rosario',      tag: 'ROS' },
+  { name: 'Córdoba',      tag: 'CBA' },
+  { name: 'Mendoza',      tag: 'MDZ' },
+  { name: 'Paraná',       tag: 'PRA' },
+  { name: 'Rafaela',      tag: 'RAF' },
+];
+const SUC_COLORS = ['#4fc3f7','#a78bfa','#34d399','#fb923c','#f472b6','#facc15','#60a5fa'];
+
+const LIVE_DATA = [
+  { tBuf:{L:4820,U:38400,cajas:192,pallets:8,demora:1,sat:38}, rec:{L:1240,U:9800,cap:82}, rBuf:{L:980,U:8100,sat:22}, guard:{L:910,U:7800,cap:76}, pBuf:{ped:148,L:3400,U:22000,dias:0,sat:31}, pick:{ped:130,L:3200,U:20100,cap:88}, audit:{ped:128,L:3100,U:20800,cap:91}, desp:{ped:126,L:3050,U:20200,bultos:404,pallets:10,cap:89} },
+  { tBuf:{L:1100,U:8200,cajas:41,pallets:2,demora:3,sat:61}, rec:{L:480,U:3900,cap:54}, rBuf:{L:620,U:5100,sat:74}, guard:{L:310,U:2800,cap:38}, pBuf:{ped:94,L:1800,U:11200,dias:2,sat:55}, pick:{ped:71,L:1600,U:10400,cap:62}, audit:{ped:69,L:1550,U:10100,cap:59}, desp:{ped:68,L:1520,U:9900,bultos:198,pallets:5,cap:61} },
+  { tBuf:{L:920,U:7100,cajas:36,pallets:2,demora:0,sat:29}, rec:{L:390,U:3200,cap:71}, rBuf:{L:280,U:2400,sat:18}, guard:{L:270,U:2300,cap:68}, pBuf:{ped:82,L:2100,U:13400,dias:3,sat:48}, pick:{ped:66,L:1900,U:12100,cap:55}, audit:{ped:65,L:1880,U:11900,cap:57}, desp:{ped:64,L:1850,U:11700,bultos:234,pallets:6,cap:56} },
+  { tBuf:{L:1380,U:10200,cajas:51,pallets:3,demora:6,sat:88}, rec:{L:520,U:4100,cap:31}, rBuf:{L:1800,U:14000,sat:91}, guard:{L:200,U:1800,cap:22}, pBuf:{ped:110,L:2200,U:14100,dias:1,sat:42}, pick:{ped:98,L:2100,U:13500,cap:79}, audit:{ped:97,L:2060,U:13700,cap:81}, desp:{ped:96,L:2040,U:13400,bultos:268,pallets:7,cap:80} },
+  { tBuf:{L:640,U:5100,cajas:26,pallets:1,demora:0,sat:19}, rec:{L:280,U:2300,cap:66}, rBuf:{L:190,U:1600,sat:14}, guard:{L:230,U:2000,cap:71}, pBuf:{ped:61,L:1200,U:7800,dias:5,sat:67}, pick:{ped:42,L:980,U:6400,cap:43}, audit:{ped:41,L:960,U:6200,cap:41}, desp:{ped:40,L:940,U:6100,bultos:122,pallets:3,cap:42} },
+  { tBuf:{L:410,U:3300,cajas:17,pallets:1,demora:2,sat:44}, rec:{L:190,U:1600,cap:73}, rBuf:{L:240,U:2000,sat:33}, guard:{L:155,U:1350,cap:58}, pBuf:{ped:44,L:880,U:5600,dias:1,sat:29}, pick:{ped:38,L:820,U:5200,cap:69}, audit:{ped:37,L:800,U:5100,cap:71}, desp:{ped:37,L:790,U:5000,bultos:100,pallets:3,cap:70} },
+  { tBuf:{L:290,U:2400,cajas:12,pallets:1,demora:0,sat:12}, rec:{L:140,U:1200,cap:88}, rBuf:{L:110,U:900,sat:9}, guard:{L:115,U:960,cap:84}, pBuf:{ped:28,L:620,U:4000,dias:9,sat:82}, pick:{ped:14,L:480,U:3100,cap:28}, audit:{ped:13,L:460,U:2900,cap:25}, desp:{ped:13,L:450,U:2800,bultos:56,pallets:2,cap:26} },
+];
+
+/* DATOS HISTORICOS SIMULADOS */
+const HIST_DATA = {
+  '2026-06-11': [
+    { tBuf:{L:4100,U:33000,cajas:165,pallets:7,demora:0,sat:30}, rec:{L:1100,U:8700,cap:78}, rBuf:{L:800,U:6600,sat:18}, guard:{L:820,U:7000,cap:71}, pBuf:{ped:133,L:3000,U:19800,dias:0,sat:27}, pick:{ped:115,L:2850,U:18000,cap:85}, audit:{ped:113,L:2780,U:18600,cap:88}, desp:{ped:112,L:2730,U:18100,bultos:370,pallets:9,cap:86} },
+    { tBuf:{L:900,U:6800,cajas:34,pallets:2,demora:2,sat:52}, rec:{L:430,U:3500,cap:48}, rBuf:{L:550,U:4600,sat:68}, guard:{L:280,U:2500,cap:34}, pBuf:{ped:84,L:1640,U:10100,dias:2,sat:50}, pick:{ped:64,L:1440,U:9300,cap:57}, audit:{ped:62,L:1390,U:9100,cap:54}, desp:{ped:61,L:1360,U:8900,bultos:178,pallets:4,cap:56} },
+    { tBuf:{L:800,U:6200,cajas:31,pallets:2,demora:0,sat:24}, rec:{L:360,U:2900,cap:67}, rBuf:{L:240,U:2100,sat:15}, guard:{L:245,U:2100,cap:64}, pBuf:{ped:74,L:1900,U:12100,dias:2,sat:44}, pick:{ped:59,L:1720,U:10900,cap:50}, audit:{ped:58,L:1700,U:10700,cap:52}, desp:{ped:57,L:1670,U:10500,bultos:210,pallets:5,cap:51} },
+    { tBuf:{L:1200,U:8900,cajas:44,pallets:3,demora:5,sat:81}, rec:{L:480,U:3800,cap:28}, rBuf:{L:1600,U:12500,sat:85}, guard:{L:180,U:1600,cap:19}, pBuf:{ped:100,L:2000,U:12700,dias:1,sat:38}, pick:{ped:89,L:1910,U:12200,cap:73}, audit:{ped:88,L:1870,U:12300,cap:75}, desp:{ped:87,L:1850,U:12100,bultos:242,pallets:6,cap:74} },
+    { tBuf:{L:560,U:4400,cajas:22,pallets:1,demora:0,sat:16}, rec:{L:250,U:2050,cap:61}, rBuf:{L:170,U:1440,sat:12}, guard:{L:205,U:1800,cap:67}, pBuf:{ped:55,L:1080,U:7050,dias:4,sat:62}, pick:{ped:38,L:885,U:5780,cap:38}, audit:{ped:37,L:865,U:5590,cap:37}, desp:{ped:36,L:848,U:5510,bultos:110,pallets:3,cap:38} },
+    { tBuf:{L:370,U:2980,cajas:15,pallets:1,demora:1,sat:40}, rec:{L:172,U:1440,cap:68}, rBuf:{L:215,U:1800,sat:30}, guard:{L:140,U:1215,cap:54}, pBuf:{ped:40,L:792,U:5040,dias:1,sat:26}, pick:{ped:34,L:738,U:4680,cap:64}, audit:{ped:33,L:720,U:4590,cap:66}, desp:{ped:33,L:712,U:4500,bultos:90,pallets:2,cap:65} },
+    { tBuf:{L:260,U:2150,cajas:10,pallets:1,demora:0,sat:10}, rec:{L:126,U:1080,cap:82}, rBuf:{L:99,U:810,sat:7}, guard:{L:103,U:864,cap:79}, pBuf:{ped:25,L:558,U:3600,dias:8,sat:76}, pick:{ped:13,L:432,U:2790,cap:25}, audit:{ped:12,L:414,U:2610,cap:22}, desp:{ped:12,L:405,U:2520,bultos:50,pallets:2,cap:24} },
+  ],
+  '2026-06-10': [
+    { tBuf:{L:5200,U:41000,cajas:210,pallets:9,demora:2,sat:45}, rec:{L:1380,U:10900,cap:74}, rBuf:{L:1100,U:9100,sat:28}, guard:{L:1000,U:8600,cap:69}, pBuf:{ped:162,L:3700,U:24000,dias:1,sat:36}, pick:{ped:144,L:3500,U:21900,cap:81}, audit:{ped:142,L:3400,U:22700,cap:84}, desp:{ped:140,L:3340,U:22200,bultos:442,pallets:11,cap:83} },
+    { tBuf:{L:1250,U:9400,cajas:48,pallets:2,demora:4,sat:70}, rec:{L:545,U:4400,cap:48}, rBuf:{L:700,U:5800,sat:80}, guard:{L:355,U:3200,cap:32}, pBuf:{ped:107,L:2040,U:12800,dias:3,sat:62}, pick:{ped:81,L:1820,U:11900,cap:55}, audit:{ped:79,L:1770,U:11500,cap:52}, desp:{ped:78,L:1740,U:11300,bultos:225,pallets:6,cap:54} },
+    { tBuf:{L:1040,U:8050,cajas:41,pallets:2,demora:1,sat:33}, rec:{L:442,U:3630,cap:64}, rBuf:{L:318,U:2720,sat:21}, guard:{L:307,U:2610,cap:61}, pBuf:{ped:93,L:2380,U:15200,dias:4,sat:53}, pick:{ped:75,L:2150,U:13700,cap:49}, audit:{ped:74,L:2130,U:13500,cap:51}, desp:{ped:73,L:2100,U:13300,bultos:265,pallets:7,cap:50} },
+    { tBuf:{L:1560,U:11600,cajas:58,pallets:3,demora:7,sat:94}, rec:{L:590,U:4650,cap:27}, rBuf:{L:2040,U:15900,sat:96}, guard:{L:226,U:2040,cap:18}, pBuf:{ped:124,L:2500,U:16000,dias:2,sat:47}, pick:{ped:111,L:2380,U:15300,cap:72}, audit:{ped:110,L:2330,U:15500,cap:74}, desp:{ped:109,L:2310,U:15200,bultos:303,pallets:8,cap:73} },
+    { tBuf:{L:724,U:5780,cajas:30,pallets:1,demora:0,sat:22}, rec:{L:317,U:2610,cap:60}, rBuf:{L:215,U:1820,sat:16}, guard:{L:260,U:2270,cap:65}, pBuf:{ped:69,L:1360,U:8840,dias:6,sat:73}, pick:{ped:48,L:1110,U:7260,cap:39}, audit:{ped:47,L:1090,U:7040,cap:37}, desp:{ped:46,L:1067,U:6920,bultos:138,pallets:3,cap:38} },
+    { tBuf:{L:464,U:3740,cajas:19,pallets:1,demora:3,sat:50}, rec:{L:215,U:1820,cap:66}, rBuf:{L:272,U:2270,sat:37}, guard:{L:176,U:1530,cap:52}, pBuf:{ped:50,L:997,U:6350,dias:2,sat:33}, pick:{ped:43,L:929,U:5900,cap:62}, audit:{ped:42,L:907,U:5790,cap:64}, desp:{ped:42,L:896,U:5680,bultos:113,pallets:3,cap:63} },
+    { tBuf:{L:328,U:2725,cajas:14,pallets:1,demora:0,sat:14}, rec:{L:158,U:1360,cap:80}, rBuf:{L:125,U:1020,sat:11}, guard:{L:130,U:1090,cap:77}, pBuf:{ped:32,L:702,U:4540,dias:10,sat:88}, pick:{ped:16,L:544,U:3515,cap:26}, audit:{ped:15,L:521,U:3290,cap:23}, desp:{ped:15,L:510,U:3175,bultos:63,pallets:2,cap:25} },
+  ],
+};
+
+/* HELPERS */
+function fmt(n) { return n >= 1000 ? (n/1000).toFixed(1)+'k' : String(n); }
+function agingTxt(v) { return v === 0 ? 'Hoy' : v === 1 ? '1 día' : `${v} días`; }
+function bufStyle(sat) {
+  if (sat < 75) return { border:'#a78bfa44', glow:'#a78bfa22', bar:'#7c3aed', pct:'#a78bfa' };
+  if (sat < 90) return { border:'#f59e0b55', glow:'#f59e0b22', bar:'#f59e0b', pct:'#f59e0b' };
+  return { border:'#ef444466', glow:'#ef444422', bar:'#ef4444', pct:'#ef4444' };
+}
+function flujoClass(cap) { return cap >= 90 ? 'fl-ok' : cap >= 50 ? 'fl-warn' : 'fl-crit'; }
+function flujoColor(cap) { return cap >= 90 ? '#22c55e' : cap >= 50 ? '#f59e0b' : '#ef4444'; }
+
+function capBar(pct, col, label) {
+  return `<div class="cap-bar-wrap">
+    <div class="cap-bar-lbl"><span class="cap-bar-txt">${label}</span><span class="cap-bar-pct" style="color:${col.pct}">${pct}%</span></div>
+    <div class="cap-bar-bg"><div class="cap-bar-fill" style="width:${pct}%;background:${col.bar};"></div></div>
+  </div>`;
+}
+function mp2(L, U) {
+  return `<div class="metric-pair">
+    <div class="metric"><div class="metric-val">${fmt(L)}</div><div class="metric-lbl">Líneas</div></div>
+    <div class="mdivider"></div>
+    <div class="metric"><div class="metric-val">${fmt(U)}</div><div class="metric-lbl">Unidades</div></div>
+  </div>`;
+}
+
+/* BUILDERS */
+function buildTBuf(d) {
+  const c = bufStyle(d.sat);
+  const ds = d.demora === 0 ? 'd-ok' : d.demora <= 2 ? 'd-warn' : 'd-crit';
+  const dTxt = d.demora === 0 ? 'Al día' : `+${d.demora}d`;
+  return `<div class="buf-cell" style="background:var(--bg-buf);border:1.5px solid ${c.border};box-shadow:0 0 10px ${c.glow};">
+    ${mp2(d.L, d.U)}
+    <div class="extra-row">
+      <div class="conv-row">
+        <div><div class="conv-val">${d.cajas}</div><div class="conv-lbl">Cajas</div></div>
+        <div><div class="conv-val">${d.pallets}</div><div class="conv-lbl">Pallets</div></div>
+      </div>
+      <span class="demora-badge ${ds}">${dTxt}</span>
+    </div>
+    ${capBar(d.sat, c, 'Saturación')}
+  </div>`;
+}
+function buildRBuf(d) {
+  const c = bufStyle(d.sat);
+  return `<div class="buf-cell" style="background:var(--bg-buf);border:1.5px solid ${c.border};box-shadow:0 0 10px ${c.glow};">
+    ${mp2(d.L, d.U)}${capBar(d.sat, c, 'Saturación')}
+  </div>`;
+}
+function buildPBuf(d) {
+  const c = bufStyle(d.sat);
+  const aC = d.dias <= 1 ? '#22c55e' : d.dias <= 4 ? '#f59e0b' : '#ef4444';
+  return `<div class="buf-cell" style="background:var(--bg-buf);border:1.5px solid ${c.border};box-shadow:0 0 10px ${c.glow};">
+    <div class="metric-pair-3">
+      <div class="metric"><div class="metric-val">${d.ped}</div><div class="metric-lbl">Pedidos</div></div>
+      <div class="mdivider"></div>
+      <div class="metric"><div class="metric-val">${fmt(d.L)}</div><div class="metric-lbl">Líneas</div></div>
+      <div class="mdivider"></div>
+      <div class="metric"><div class="metric-val">${fmt(d.U)}</div><div class="metric-lbl">Unidades</div></div>
+    </div>
+    <div class="aging">
+      <div class="aging-dot" style="background:${aC};"></div>
+      <span class="aging-val" style="color:${aC};">${agingTxt(d.dias)}</span>
+      <span class="aging-lbl">&nbsp;pedido más antiguo</span>
+    </div>
+    ${capBar(d.sat, c, 'Saturación')}
+  </div>`;
+}
+function flujoRow(leftVal, leftLbl, rightVal, rightLbl, cap, extraLeft, extraRight) {
+  const fc = flujoClass(cap), col = flujoColor(cap);
+  return `
+  <div style="display:flex;align-items:center;padding:10px 0;">
+    <div class="flujo-data" style="flex:1;align-items:flex-end;padding:0 12px;">
+      <span class="fd-val" style="color:${col};">${leftVal}</span><span class="fd-lbl">${leftLbl}</span>${extraLeft||''}
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;width:16px;height:70px;flex-shrink:0;">
+      <div class="${fc}" style="width:4px;flex:1;border-radius:3px;overflow:hidden;"></div>
+    </div>
+    <div class="flujo-data" style="flex:1;align-items:flex-start;padding:0 12px;">
+      <span class="fd-val" style="color:${col};">${rightVal}</span><span class="fd-lbl">${rightLbl}</span>${extraRight||''}
+    </div>
+  </div>
+  <div style="padding:0 10px 8px;">
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+      <span style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;">Capacidad</span>
+      <span style="font-family:var(--mono);font-size:9px;font-weight:700;color:${col};">${cap}%</span>
+    </div>
+    <div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden;">
+      <div style="width:${cap}%;height:100%;background:${col};border-radius:2px;"></div>
+    </div>
+  </div>`;
+}
+const xtra = v => `<span style="font-family:var(--mono);font-size:10px;color:var(--chip-txt);">${v}</span>`;
+function buildRec(d)   { return flujoRow(fmt(d.L),'Líneas',fmt(d.U),'Unidades',d.cap); }
+function buildGuard(d) { return flujoRow(fmt(d.L),'Líneas',fmt(d.U),'Unidades',d.cap); }
+function buildPick(d)  { return flujoRow(fmt(d.L),'Líneas',fmt(d.U),'Unidades',d.cap,xtra(`${d.ped} ped`)); }
+function buildAudit(d) { return flujoRow(fmt(d.L),'Líneas',fmt(d.U),'Unidades',d.cap,xtra(`${d.ped} ped`)); }
+function buildDesp(d)  { return flujoRow(fmt(d.L),'Líneas',fmt(d.U),'Unidades',d.cap,xtra(`${d.ped} ped`),xtra(`${d.bultos}B / ${d.pallets}P`)); }
+
+const ROWS = [
+  { key:'tBuf',  type:'buffer', name:'Tránsito inbound',  build: d => buildTBuf(d.tBuf)  },
+  { key:'rec',   type:'flujo',  name:'Recepción',          build: d => buildRec(d.rec)    },
+  { key:'rBuf',  type:'buffer', name:'RECEP',              build: d => buildRBuf(d.rBuf)  },
+  { key:'guard', type:'flujo',  name:'Guardado',           build: d => buildGuard(d.guard)},
+  { key:'pBuf',  type:'buffer', name:'Pedidos pendientes', build: d => buildPBuf(d.pBuf)  },
+  { key:'pick',  type:'flujo',  name:'Picking',            build: d => buildPick(d.pick)  },
+  { key:'audit', type:'flujo',  name:'Auditoría',          build: d => buildAudit(d.audit)},
+  { key:'desp',  type:'flujo',  name:'Despacho',           build: d => buildDesp(d.desp)  },
+];
+
+/* STATE */
+let activeSuc = new Set(SUC.map((_,i) => i));
+let activeKpi = 'all';
+
+function todayStr() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+}
+function getData(dateStr) {
+  if (dateStr === todayStr()) return LIVE_DATA;
+  return HIST_DATA[dateStr] || null;
+}
+
+/* BOARD */
+const LABEL_W = 160, COL_W = 210, GAP = 18, N = SUC.length;
+const board = document.getElementById('board');
+board.style.gridTemplateColumns = `${LABEL_W}px repeat(${N}, ${COL_W}px)`;
+board.style.gap = `0 ${GAP}px`;
+
+function buildBoard(data) {
+  board.innerHTML = '';
+  board.appendChild(document.createElement('div'));
+  SUC.forEach((s, i) => {
+    const h = document.createElement('div');
+    h.className = 'suc-header';
+    h.dataset.sucIdx = i;
+    h.innerHTML = `<div class="suc-name" style="color:${SUC_COLORS[i]}">${s.name}</div><div class="suc-tag">${s.tag}</div>`;
+    board.appendChild(h);
+  });
+  ROWS.forEach(row => {
+    const lbl = document.createElement('div');
+    lbl.className = 'board-row-wrap';
+    lbl.dataset.rowKey = row.key;
+    lbl.style.cssText = 'display:flex;align-items:center;padding:4px 0;';
+    lbl.innerHTML = `<div class="row-label">
+      <div class="rl-type ${row.type}">${row.type==='buffer'?'▣ Buffer':'▷ Flujo'}</div>
+      <div class="rl-name">${row.name}</div>
+    </div>`;
+    board.appendChild(lbl);
+    data.forEach((d, i) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'board-cell';
+      wrap.dataset.sucIdx = i;
+      wrap.dataset.rowKey = row.key;
+      wrap.style.cssText = 'padding:4px 0;';
+      wrap.innerHTML = row.build(d);
+      board.appendChild(wrap);
+    });
+  });
+}
+
+function applyFilters() {
+  document.querySelectorAll('.suc-header[data-suc-idx]').forEach(el => {
+    el.classList.toggle('dimmed', !activeSuc.has(+el.dataset.sucIdx));
+  });
+  document.querySelectorAll('.board-row-wrap[data-row-key]').forEach(el => {
+    el.classList.toggle('dimmed', activeKpi !== 'all' && el.dataset.rowKey !== activeKpi);
+  });
+  document.querySelectorAll('.board-cell[data-suc-idx]').forEach(el => {
+    const sucOk = activeSuc.has(+el.dataset.sucIdx);
+    const kpiOk = activeKpi === 'all' || el.dataset.rowKey === activeKpi;
+    el.classList.toggle('dimmed', !sucOk || !kpiOk);
+  });
+}
+
+/* DATE */
+const dateInput  = document.getElementById('date-input');
+const histBadge  = document.getElementById('hist-badge');
+const lastUpdate = document.getElementById('last-update');
+const diasN  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const mesesN = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+dateInput.max   = todayStr();
+dateInput.value = todayStr();
+
+function renderForDate(dateStr) {
+  const isLive = dateStr === todayStr();
+  const data   = getData(dateStr);
+  if (!data) {
+    board.innerHTML = `<div style="grid-column:1/-1;padding:3rem 2rem;text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px;letter-spacing:.05em;">SIN DATOS PARA ${dateStr}</div>`;
+    document.body.classList.add('historical');
+    histBadge.classList.add('visible');
+    lastUpdate.textContent = `Cierre histórico: ${dateStr} — sin datos`;
+    return;
+  }
+  buildBoard(data);
+  applyFilters();
+  if (isLive) {
+    document.body.classList.remove('historical');
+    histBadge.classList.remove('visible');
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2,'0');
+    const mm = String(now.getMinutes()).padStart(2,'0');
+    lastUpdate.textContent = `Última actualización: ${hh}:${mm} — datos ficticios`;
+  } else {
+    document.body.classList.add('historical');
+    histBadge.classList.add('visible');
+    const [y,m,d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m-1, d);
+    lastUpdate.textContent = `Cierre histórico: ${diasN[dt.getDay()]} ${d} ${mesesN[m-1]} ${y} — datos ficticios`;
+  }
+}
+dateInput.addEventListener('change', () => renderForDate(dateInput.value));
+
+/* CHIPS */
+const chipsWrap = document.getElementById('suc-chips');
+const allChip = document.createElement('span');
+allChip.className = 'suc-chip active';
+allChip.innerHTML = `<span class="chip-dot" style="background:#64748b;"></span>Todas`;
+allChip.addEventListener('click', () => {
+  activeSuc = new Set(SUC.map((_,i) => i));
+  updateChips(); applyFilters();
+});
+chipsWrap.appendChild(allChip);
+
+const sucChips = [];
+SUC.forEach((s, i) => {
+  const chip = document.createElement('span');
+  chip.className = 'suc-chip active';
+  chip.style.color = SUC_COLORS[i];
+  chip.innerHTML = `<span class="chip-dot" style="background:${SUC_COLORS[i]};"></span>${s.name}`;
+  chip.addEventListener('click', () => {
+    if (activeSuc.has(i) && activeSuc.size === 1) return;
+    activeSuc.has(i) ? activeSuc.delete(i) : activeSuc.add(i);
+    updateChips(); applyFilters();
+  });
+  chipsWrap.appendChild(chip);
+  sucChips.push(chip);
+});
+
+function updateChips() {
+  allChip.classList.toggle('active', activeSuc.size === SUC.length);
+  sucChips.forEach((c,i) => c.classList.toggle('active', activeSuc.has(i)));
+}
+
+/* KPI FILTER */
+document.getElementById('kpi-select').addEventListener('change', function() {
+  activeKpi = this.value; applyFilters();
+});
+
+/* INIT */
+renderForDate(todayStr());
+
+/* THEME TOGGLE */
+const themeBtn   = document.getElementById('theme-toggle');
+const themeDot   = document.getElementById('theme-dot');
+const themeLabel = document.getElementById('theme-label');
+
+function applyTheme(light) {
+  document.body.classList.toggle('light-mode', light);
+  themeDot.style.background = light ? '#475569' : '#facc15';
+  themeLabel.textContent = light ? 'Modo oscuro' : 'Modo claro';
+}
+const savedTheme = localStorage.getItem('etman-theme');
+applyTheme(savedTheme === 'light');
+
+themeBtn.addEventListener('click', () => {
+  const isLight = !document.body.classList.contains('light-mode');
+  applyTheme(isLight);
+  localStorage.setItem('etman-theme', isLight ? 'light' : 'dark');
+});
+</script>
+</body>
+</html>
