@@ -83,8 +83,22 @@ const DIAS_EQ_SEMANA = 5.25; // 5 días completos + sábado al 25%
 function num(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
 
 function parseDatosOperativos(rows) {
-  // rows[0] = grupos, rows[1] = encabezados de columna, rows[2+] = datos
-  const header = rows[1].map(h => h.trim());
+  // Los encabezados pueden venir en una fila ("fecha", "tBuf_L") o combinados con
+  // el grupo en la misma celda ("IDENTIFICACIÓN fecha", "TRÁNSITO INBOUND tBuf_L")
+  // si Google Sheets aplanó celdas fusionadas al exportar. Para ser robustos,
+  // identificamos cada columna por su NOMBRE TÉCNICO como última palabra de la celda.
+
+  // 1) Encontrar la fila de encabezados: la que tiene una celda terminada en "fecha"
+  //    y otra que sea (o termine en) "sucursal".
+  const lastToken = c => (c || '').trim().split(/\s+/).pop(); // última palabra
+  let headerRow = -1;
+  for (let r = 0; r < rows.length; r++) {
+    const tokens = rows[r].map(lastToken);
+    if (tokens.includes('fecha') && tokens.includes('sucursal')) { headerRow = r; break; }
+  }
+  if (headerRow === -1) return {};
+
+  const header = rows[headerRow].map(lastToken);
   const idx = name => header.indexOf(name);
 
   const col = {
@@ -103,8 +117,9 @@ function parseDatosOperativos(rows) {
   };
 
   const byDate = {}; // { 'YYYY-MM-DD': [ rowPerSuc... ] }
+  const firstDataRow = headerRow + 1;
 
-  for (let r = 2; r < rows.length; r++) {
+  for (let r = firstDataRow; r < rows.length; r++) {
     const row = rows[r];
     const fecha = (row[col.fecha] || '').trim();
     if (!fecha) continue;
@@ -136,23 +151,26 @@ function parseDatosOperativos(rows) {
    Columnas: Sucursal | Fase | Cap.Mensual | Cap.Semanal | Cap.Diaria | (spacer) | UmbralAtencion | UmbralCritico
 */
 function parseCapacidades(rows) {
-  // Buscar la fila de encabezados (la que contiene "Sucursal" y "Fase")
+  // Headers pueden venir limpios ("Sucursal") o combinados con grupo.
+  // Comparamos por última palabra para tolerar ambos casos.
+  const lastToken = c => (c || '').trim().split(/\s+/).pop();
   let headerRow = -1;
   for (let r = 0; r < rows.length; r++) {
-    if (rows[r].some(c => c.trim() === 'Sucursal') && rows[r].some(c => c.trim() === 'Fase')) {
+    const tokens = rows[r].map(lastToken);
+    if (tokens.includes('Sucursal') && tokens.includes('Fase')) {
       headerRow = r;
       break;
     }
   }
   if (headerRow === -1) return {};
 
-  const header = rows[headerRow].map(h => h.trim());
-  const cSuc  = header.indexOf('Sucursal');
-  const cFase = header.indexOf('Fase');
-  // Cap. Diaria es la 3ra columna numérica después de Fase (Mensual, Semanal, Diaria)
-  // La buscamos por texto para no depender de un offset fijo.
-  let cDiaria = header.findIndex(h => h.replace(/\s/g,'').toLowerCase().includes('diaria') && h.toLowerCase().includes('cap'));
-  if (cDiaria === -1) cDiaria = cFase + 3; // fallback al layout esperado (Sucursal, Fase, Mensual, Semanal, Diaria)
+  const header = rows[headerRow].map(h => (h || '').trim());
+  const tokens = rows[headerRow].map(lastToken);
+  const cSuc  = tokens.indexOf('Sucursal');
+  const cFase = tokens.indexOf('Fase');
+  // Cap. Diaria: buscamos la columna cuyo texto contenga "diaria".
+  let cDiaria = header.findIndex(h => h.toLowerCase().includes('diaria'));
+  if (cDiaria === -1) cDiaria = cFase + 3; // fallback al layout esperado
 
   const FASE_KEY = {
     'Recepción': 'rec', 'Recepcion': 'rec',
@@ -214,13 +232,13 @@ const NODE_KEY = {
 };
 
 function parseFlujo(rows) {
-  // Buscar la fila de encabezados real (la que contiene fecha, origen y destino).
-  // Las celdas pueden venir como "fecha\nFecha del registro\n(AAAA-MM-DD)" (nombre + descripción),
-  // así que comparamos solo la primera línea de cada celda.
-  const firstLine = c => (c || '').split('\n')[0].trim().toLowerCase();
+  // Buscar la fila de encabezados real (fecha, origen, destino).
+  // Tolera celdas combinadas: "fecha\nFecha del registro" o "GRUPO fecha".
+  // Tomamos la última palabra de la primera línea de cada celda.
+  const token = c => (c || '').split('\n')[0].trim().split(/\s+/).pop().toLowerCase();
   let headerRowIdx = -1;
   for (let r = 0; r < rows.length; r++) {
-    const cells = rows[r].map(firstLine);
+    const cells = rows[r].map(token);
     if (cells.includes('fecha') && cells.includes('origen') && cells.includes('destino')) {
       headerRowIdx = r;
       break;
@@ -228,7 +246,7 @@ function parseFlujo(rows) {
   }
   if (headerRowIdx === -1) return {};
 
-  const hdr = rows[headerRowIdx].map(firstLine);
+  const hdr = rows[headerRowIdx].map(token);
   const cFecha = hdr.indexOf('fecha');
   const cOrigen = hdr.indexOf('origen');
   const cDestino = hdr.indexOf('destino');
