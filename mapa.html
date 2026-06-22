@@ -131,12 +131,18 @@
   </div>
 </div>
 
+<script src="etman-data.js"></script>
 <script>
 /* ── DATE ── */
-const now=new Date();
 const DS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const MS=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-document.getElementById('hdr-date').textContent=`${DS[now.getDay()]} ${now.getDate()} ${MS[now.getMonth()]} ${now.getFullYear()}`;
+function setHdrDate(dateStr){
+  if(!dateStr){ document.getElementById('hdr-date').textContent='Cargando…'; return; }
+  const [y,m,d]=dateStr.split('-').map(Number);
+  const dt=new Date(y,m-1,d);
+  document.getElementById('hdr-date').textContent=`Último cierre: ${DS[dt.getDay()]} ${d} ${MS[m-1]} ${y}`;
+}
+setHdrDate(null);
 
 /* ── MAP ── */
 const map=L.map('map',{
@@ -175,34 +181,9 @@ Object.entries(NODES).forEach(([k,n])=>{
 
 const activeFilter=new Set(Object.keys(NODES));
 
-/* ── FLOWS ── */
-const FLOWS={
-  transferencias:[
-    {from:'moreno',to:'bahia',      L:420,U:3200,dias:1},
-    {from:'moreno',to:'cordoba',    L:310,U:2400,dias:2},
-    {from:'moreno',to:'guaymallen', L:280,U:2100,dias:2},
-    {from:'moreno',to:'rosario',    L:190,U:1500,dias:1},
-    {from:'moreno',to:'parana',     L:140,U:1100,dias:2},
-    {from:'moreno',to:'rafaela',    L:120,U:940, dias:1},
-  ],
-  complementos:[
-    {from:'bahia',      to:'cordoba',    L:35, U:41, dias:3},{from:'cordoba',    to:'bahia',      L:28, U:33, dias:3},
-    {from:'bahia',      to:'guaymallen', L:18, U:21, dias:4},{from:'guaymallen', to:'bahia',      L:14, U:17, dias:4},
-    {from:'bahia',      to:'rosario',    L:30, U:35, dias:2},{from:'rosario',    to:'bahia',      L:24, U:28, dias:2},
-    {from:'bahia',      to:'parana',     L:22, U:26, dias:3},{from:'parana',     to:'bahia',      L:18, U:21, dias:3},
-    {from:'bahia',      to:'rafaela',    L:20, U:24, dias:2},{from:'rafaela',    to:'bahia',      L:16, U:19, dias:2},
-    {from:'cordoba',    to:'guaymallen', L:60, U:71, dias:1},{from:'guaymallen', to:'cordoba',    L:45, U:53, dias:1},
-    {from:'cordoba',    to:'rosario',    L:185,U:220,dias:1},{from:'rosario',    to:'cordoba',    L:160,U:190,dias:1},
-    {from:'cordoba',    to:'parana',     L:38, U:45, dias:2},{from:'parana',     to:'cordoba',    L:30, U:36, dias:2},
-    {from:'cordoba',    to:'rafaela',    L:32, U:38, dias:1},{from:'rafaela',    to:'cordoba',    L:26, U:31, dias:1},
-    {from:'guaymallen', to:'rosario',    L:25, U:30, dias:2},{from:'rosario',    to:'guaymallen', L:20, U:24, dias:2},
-    {from:'guaymallen', to:'parana',     L:18, U:21, dias:3},{from:'parana',     to:'guaymallen', L:14, U:17, dias:3},
-    {from:'guaymallen', to:'rafaela',    L:15, U:18, dias:2},{from:'rafaela',    to:'guaymallen', L:12, U:14, dias:2},
-    {from:'rosario',    to:'parana',     L:175,U:210,dias:1},{from:'parana',     to:'rosario',    L:155,U:185,dias:1},
-    {from:'rosario',    to:'rafaela',    L:190,U:228,dias:1},{from:'rafaela',    to:'rosario',    L:165,U:198,dias:1},
-    {from:'parana',     to:'rafaela',    L:25, U:30, dias:1},{from:'rafaela',    to:'parana',     L:20, U:24, dias:1},
-  ],
-};
+/* ── FLOWS — cargados desde Google Sheets vía etman-data.js ── */
+let FLOWS = { transferencias: [], complementos: [] };
+let MAPA_DATA = null; // se llena tras loadETMANData()
 
 /* ── HELPERS ── */
 function fmt(n){return n>=1000?(n/1000).toFixed(1)+'k':String(n);}
@@ -423,7 +404,21 @@ sw.addEventListener('change',e=>{
 });
 
 /* ── INIT ── */
-map.whenReady(()=>setTimeout(()=>renderFlows('transferencias'),100));
+window.ETMAN.loadETMANData().then(data => {
+  MAPA_DATA = data;
+  const latest = data.latestDate;
+  setHdrDate(latest);
+
+  FLOWS = {
+    transferencias: latest ? (data.transferencias[latest] || []) : [],
+    complementos:   latest ? (data.complementos[latest]   || []) : [],
+  };
+
+  map.whenReady(()=>setTimeout(()=>renderFlows('transferencias'),100));
+}).catch(err => {
+  console.error(err);
+  document.getElementById('hdr-date').textContent = 'Error al cargar datos';
+});
 
 /* THEME TOGGLE */
 const themeBtn   = document.getElementById('theme-toggle');
