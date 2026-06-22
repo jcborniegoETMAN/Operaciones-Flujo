@@ -168,8 +168,13 @@ function parseCapacidades(rows) {
   const tokens = rows[headerRow].map(lastToken);
   const cSuc  = tokens.indexOf('Sucursal');
   const cFase = tokens.indexOf('Fase');
-  // Cap. Diaria: buscamos la columna cuyo texto contenga "diaria".
-  let cDiaria = header.findIndex(h => h.toLowerCase().includes('diaria'));
+  // Cap. Diaria: la columna "Cap. Diaria". El título de la hoja empieza con
+  // "CAPACIDADES" (sin punto tras "cap"), mientras que la columna empieza con
+  // "Cap." (con punto), así que exigir "cap." los distingue sin ambigüedad.
+  let cDiaria = header.findIndex(h => {
+    const t = h.toLowerCase().replace(/\s+/g, ' ').trim();
+    return t.startsWith('cap.') && t.includes('diaria');
+  });
   if (cDiaria === -1) cDiaria = cFase + 3; // fallback al layout esperado
 
   const FASE_KEY = {
