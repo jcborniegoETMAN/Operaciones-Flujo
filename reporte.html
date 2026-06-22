@@ -233,12 +233,12 @@
 
 </div>
 
-<script src="etman-data.js"></script>
+<script src="etman-data.js?v=3"></script>
 <script>
 /* ══════════════════════════════════════════════
    DATOS — cargados desde Google Sheets vía etman-data.js
    ══════════════════════════════════════════════ */
-const SUC = window.ETMAN.SUC.map((s, i) => ({ ...s, color: window.ETMAN.SUC_COLORS[i] }));
+const SUCR = window.ETMAN.SUC.map((s, i) => ({ ...s, color: window.ETMAN.SUC_COLORS[i] }));
 
 const FASES = [
   { key:'tBuf',  label:'Tránsito inbound',  tipo:'buf', metrica:'sat',  umbrales:{warn:75, crit:90},  unidad:'%', desc:'Saturación' },
@@ -314,7 +314,7 @@ let chartInstances = [];
    CHIPS — SUCURSALES
    ══════════════════════════════════════════════ */
 const sucChipsEl = document.getElementById('suc-chips');
-SUC.forEach((s, i) => {
+SUCR.forEach((s, i) => {
   const chip = document.createElement('span');
   chip.className = 'chip' + (selSuc.has(i) ? ' active' : '');
   chip.style.color = s.color;
@@ -378,7 +378,7 @@ function generarReporte() {
   // ── ENCABEZADO ──
   const header = document.createElement('div');
   header.className = 'card';
-  const sucNames = sucList.map(i => SUC[i].name).join(', ');
+  const sucNames = sucList.map(i => SUCR[i].name).join(', ');
   const faseNames = faseList.map(f => f.label).join(', ');
   const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const [dy,dm,dd] = desde.split('-').map(Number);
@@ -416,7 +416,7 @@ function generarReporte() {
         return getMetrica(dd, si, fase.key, fase.metrica);
       }).filter(v => v !== null);
       const avg = vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : null;
-      return { suc: SUC[si], avg };
+      return { suc: SUCR[si], avg };
     });
 
     // Alert days count
@@ -430,7 +430,7 @@ function generarReporte() {
         if (lvl === 'warn') warn++;
         if (lvl === 'crit') crit++;
       });
-      return { suc: SUC[si], warn, crit, total: warn+crit };
+      return { suc: SUCR[si], warn, crit, total: warn+crit };
     });
 
     card.innerHTML = `
@@ -506,14 +506,14 @@ function generarReporte() {
         return getMetrica(dd, si, fase.key, fase.metrica);
       });
       return {
-        label: SUC[si].name,
+        label: SUCR[si].name,
         data,
-        borderColor: SUC[si].color,
-        backgroundColor: SUC[si].color + '18',
+        borderColor: SUCR[si].color,
+        backgroundColor: SUCR[si].color + '18',
         borderWidth: 2,
         pointRadius: 4,
         pointHoverRadius: 6,
-        pointBackgroundColor: SUC[si].color,
+        pointBackgroundColor: SUCR[si].color,
         tension: 0.35,
         spanGaps: true,
       };

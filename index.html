@@ -278,11 +278,10 @@
 
   <p class="last-update" id="last-update"></p>
 
-<script src="etman-data.js"></script>
+<script src="etman-data.js?v=3"></script>
 <script>
-/* SUC y SUC_COLORS provistos por etman-data.js (window.ETMAN) */
-const SUC = window.ETMAN.SUC;
-const SUC_COLORS = window.ETMAN.SUC_COLORS;
+/* SUC y SUC_COLORS ya existen como variables globales (las declara etman-data.js).
+   No se redeclaran acá para evitar colisión de scope global. */
 
 /* HELPERS */
 function fmt(n) { return n >= 1000 ? (n/1000).toFixed(1)+'k' : String(n); }
